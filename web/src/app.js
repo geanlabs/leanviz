@@ -192,7 +192,13 @@ import {
       } catch (err) {
         const userErr = toUserError(err, "REST");
         setLiveError(userErr);
-        setMode("demo", `${userErr} - running in demo mode`);
+        if (state.mode === "live") {
+          setWarning(`${userErr} - staying in live mode`);
+          state.live.connected = false;
+          setModeBadge();
+        } else {
+          setMode("demo", `${userErr} - running in demo mode`);
+        }
       }
     }
 
@@ -272,7 +278,13 @@ import {
         es.onerror = () => {
           const errText = `SSE: network/CORS blocked (${state.live.beaconUrl})`;
           setLiveError(errText);
-          setMode("demo", `${errText} - running in demo mode`);
+          if (state.mode === "live") {
+            setWarning(`${errText} - staying in live mode`);
+            state.live.connected = false;
+            setModeBadge();
+          } else {
+            setMode("demo", `${errText} - running in demo mode`);
+          }
         };
 
         const bindEvent = (name) => {
@@ -288,7 +300,13 @@ import {
       } catch (err) {
         const userErr = toUserError(err, "SSE");
         setLiveError(userErr);
-        setMode("demo", `${userErr} - running in demo mode`);
+        if (state.mode === "live") {
+          setWarning(`${userErr} - staying in live mode`);
+          state.live.connected = false;
+          setModeBadge();
+        } else {
+          setMode("demo", `${userErr} - running in demo mode`);
+        }
         return;
       }
 
@@ -303,8 +321,15 @@ import {
         if (state.mode !== "live") return;
         const idleFor = Date.now() - state.live.lastEventAt;
         if (idleFor > 20000) {
-          setLiveError("SSE: timeout waiting for events");
-          setMode("demo", "Live SSE timeout - running in demo mode");
+          const errText = "SSE: timeout waiting for events";
+          setLiveError(errText);
+          if (state.mode === "live") {
+            setWarning(`${errText} - staying in live mode`);
+            state.live.connected = false;
+            setModeBadge();
+          } else {
+            setMode("demo", "Live SSE timeout - running in demo mode");
+          }
         }
       }, 5000);
     }
@@ -336,7 +361,7 @@ import {
         nodes.settingsPanel.classList.toggle("open");
       });
 
-      nodes.applySettings.addEventListener("click", () => {
+      const applySettingsFromInputs = () => {
         state.live.beaconUrl = nodes.beaconInput.value.trim() || "http://localhost:5052";
         state.live.metricsUrl = nodes.metricsInput.value.trim() || "http://localhost:9090";
         state.live.apiNamespace = nodes.nsSelect.value === "eth" ? "eth" : "lean";
@@ -346,6 +371,10 @@ import {
 
         const mode = nodes.modeSelect.value === "live" ? "live" : "demo";
         setMode(mode);
+      };
+
+      nodes.applySettings.addEventListener("click", () => {
+        applySettingsFromInputs();
       });
     }
 

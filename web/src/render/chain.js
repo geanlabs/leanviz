@@ -44,6 +44,11 @@ export function drawChainCanvas(now) {
 
   visible.sort((a, b) => a.block.slot - b.block.slot);
 
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(0, 0, w, h);
+  ctx.clip();
+
   for (let i = 1; i < visible.length; i++) {
     const prev = visible[i - 1];
     const cur = visible[i];
@@ -60,8 +65,10 @@ export function drawChainCanvas(now) {
 
   for (const item of visible) {
     const { block, x, y } = item;
+    if (x < 2 || (x + blockW) > (w - 2)) continue;
     const status = getBlockStatus(block);
     const fade = Math.max(0.1, Math.min(1, (x + 80) / (w * 0.52)));
+    const edgeGlowClamp = x < 8 || (x + blockW) > (w - 8);
 
     let color = COLORS.blue;
     if (status === "JUSTIFIED") color = COLORS.amber;
@@ -78,10 +85,10 @@ export function drawChainCanvas(now) {
     ctx.stroke();
     ctx.setLineDash([]);
 
-    ctx.shadowBlur = status === "MISSED" ? 0 : 18;
+    ctx.shadowBlur = (status === "MISSED" || edgeGlowClamp) ? 0 : 18;
     ctx.shadowColor = status === "FINALIZED" ? "rgba(34,197,94,0.65)" : `${color}99`;
     if (block.flashUntil > now) {
-      ctx.shadowBlur = 30;
+      ctx.shadowBlur = edgeGlowClamp ? 0 : 30;
       ctx.shadowColor = "rgba(34,197,94,0.9)";
     }
     roundRect(ctx, x, y, blockW, blockH, 12);
@@ -138,4 +145,5 @@ export function drawChainCanvas(now) {
     }
   }
   ctx.globalAlpha = 1;
+  ctx.restore();
 }

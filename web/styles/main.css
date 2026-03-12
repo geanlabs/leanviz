@@ -45,8 +45,8 @@
     }
 
     .app {
-      width: min(1680px, calc(100vw - 24px));
-      margin: 12px auto;
+      width: 100%;
+      margin: 0;
       border: 1px solid var(--border);
       background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.005));
       box-shadow: 0 24px 80px rgba(0, 0, 0, 0.55);
@@ -270,6 +270,7 @@
       color: #b9fff2;
       background: rgba(0,255,204,0.12);
     }
+
 
     .debug {
       margin-top: 8px;

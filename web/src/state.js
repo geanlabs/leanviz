@@ -1,4 +1,4 @@
-export const DEMO_SLOT_MS = 8000;
+export const DEMO_SLOT_MS = 4000;
 export const LIVE_SLOT_MS = 4000;
 export const DEFAULT_VALIDATOR_COUNT = 24;
 
