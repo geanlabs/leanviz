@@ -1,7 +1,7 @@
 import { COLORS, state } from "../state.js";
 import { validatorCanvas, validatorCtx } from "../dom.js";
 import { getValidatorCount } from "../sim/logic.js";
-import { drawValidatorAvatar } from "./primitives.js";
+import { drawValidatorAvatar, roundRect } from "./primitives.js";
 
 export function drawValidatorCanvas(now) {
   const ctx = validatorCtx;
@@ -31,12 +31,31 @@ export function drawValidatorCanvas(now) {
   ctx.lineWidth = 1.2;
   ctx.stroke();
 
+  const blockLabel = "BLOCK";
+  const slotLabel = String(state.currentSlot);
+  ctx.textAlign = "center";
+
+  ctx.font = "700 11px 'Space Mono'";
+  const labelW = ctx.measureText(blockLabel).width;
+  ctx.font = "700 13px 'Space Mono'";
+  const slotW = ctx.measureText(slotLabel).width;
+  const boxW = Math.max(labelW, slotW) + 18;
+  const boxH = 34;
+  const boxX = cx - boxW / 2;
+  const boxY = cy - boxH / 2;
+
+  roundRect(ctx, boxX, boxY, boxW, boxH, 8);
+  ctx.fillStyle = "rgba(6,10,18,0.85)";
+  ctx.fill();
+  ctx.lineWidth = 1;
+  ctx.strokeStyle = "rgba(0,255,204,0.35)";
+  ctx.stroke();
+
   ctx.font = "700 11px 'Space Mono'";
   ctx.fillStyle = "#c9fff4";
-  ctx.textAlign = "center";
-  ctx.fillText("BLOCK", cx, cy - 2);
+  ctx.fillText(blockLabel, cx, cy - 4);
   ctx.font = "700 13px 'Space Mono'";
-  ctx.fillText(String(state.currentSlot), cx, cy + 12);
+  ctx.fillText(slotLabel, cx, cy + 11);
 
   const count = getValidatorCount();
   const nodePos = [];
