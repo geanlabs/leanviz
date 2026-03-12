@@ -1,0 +1,266 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>LeanViz API Check</title>
+  <style>
+    :root {
+      --bg: #050508;
+      --card: #0d0d14;
+      --border: #1a1a2e;
+      --ok: #22c55e;
+      --bad: #ef4444;
+      --warn: #f59e0b;
+      --text: #e2e8f0;
+      --muted: #64748b;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; padding: 24px; min-height: 100vh;
+      background: var(--bg);
+      color: var(--text);
+      font-family: system-ui, -apple-system, sans-serif;
+    }
+    h1 { margin: 0 0 12px; font-size: 20px; }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px;
+      margin-bottom: 16px;
+    }
+    .row { display: flex; gap: 12px; flex-wrap: wrap; }
+    label { font-size: 12px; color: var(--muted); }
+    input, select {
+      background: #0b0b12; color: var(--text);
+      border: 1px solid var(--border); border-radius: 6px;
+      padding: 6px 8px; min-width: 240px;
+    }
+    button {
+      background: #0ea5e9; color: #081019; border: none;
+      padding: 8px 14px; border-radius: 8px; cursor: pointer;
+      font-weight: 600;
+    }
+    .list { margin: 0; padding: 0; list-style: none; }
+    .item { display: flex; align-items: center; gap: 10px; padding: 6px 0; border-bottom: 1px dashed #1a1a2e; }
+    .pill { font-size: 11px; padding: 2px 6px; border-radius: 999px; border: 1px solid var(--border); }
+    .ok { color: var(--ok); border-color: rgba(34,197,94,0.4); }
+    .bad { color: var(--bad); border-color: rgba(239,68,68,0.4); }
+    .warn { color: var(--warn); border-color: rgba(245,158,11,0.4); }
+    code { color: #a5b4fc; }
+  </style>
+</head>
+<body>
+  <h1>LeanViz API Check</h1>
+  <div class="card">
+    <div class="row">
+      <div>
+        <label>Base URL</label><br />
+        <input id="baseUrl" type="text" value="http://localhost:5052" />
+      </div>
+      <div>
+        <label>Namespace</label><br />
+        <select id="ns">
+          <option value="lean/v0">/lean/v0</option>
+          <option value="eth/v1">/eth/v1</option>
+        </select>
+      </div>
+      <div style="align-self:flex-end;">
+        <button id="runBtn">Run Checks</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <ul id="results" class="list"></ul>
+  </div>
+
+
+<script type="module">
+  const results = document.getElementById("results");
+  const baseUrl = document.getElementById("baseUrl");
+  const ns = document.getElementById("ns");
+  const runBtn = document.getElementById("runBtn");
+
+  const endpoints = [
+    "beacon/headers/head",
+    "beacon/states/head/finality_checkpoints",
+    "beacon/states/head/validators",
+    "node/peers",
+    "node/syncing",
+    "events?topics=head,finalized_checkpoint"
+  ];
+
+  function addItem(path, status, detail = "") {
+    const li = document.createElement("li");
+    li.className = "item";
+    const pill = document.createElement("span");
+    pill.className = `pill ${status}`;
+    pill.textContent = status.toUpperCase();
+    const text = document.createElement("span");
+    text.innerHTML = `<code>${path}</code> ${detail ? "- " + detail : ""}`;
+    li.appendChild(pill);
+    li.appendChild(text);
+    results.appendChild(li);
+  }
+
+  function hasPath(obj, path) {
+    let cur = obj;
+    for (const key of path) {
+      if (!cur || typeof cur !== "object" || !(key in cur)) return false;
+      cur = cur[key];
+    }
+    return cur !== null && cur !== undefined;
+  }
+
+  function anyPath(obj, paths) {
+    return paths.some((p) => hasPath(obj, p));
+  }
+
+  async function fetchJSON(url, timeoutMs = 4000) {
+    const controller = new AbortController();
+    const t = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const res = await fetch(url, { signal: controller.signal, cache: "no-store" });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      return { res, data };
+    } finally {
+      clearTimeout(t);
+    }
+  }
+
+  async function checkJSON(url, validateFn) {
+    try {
+      const { res, data } = await fetchJSON(url);
+      const ct = res.headers.get("content-type") || "";
+      if (!ct.includes("json")) {
+        addItem(url, "warn", `content-type ${ct || "unknown"}`);
+        return;
+      }
+      const { status, detail } = validateFn(data);
+      addItem(url, status, detail);
+    } catch (err) {
+      addItem(url, "bad", err.message || String(err));
+    }
+  }
+
+  async function checkSSE(url) {
+    const controller = new AbortController();
+    const t = setTimeout(() => controller.abort(), 1200);
+    try {
+      const res = await fetch(url, { signal: controller.signal, cache: "no-store" });
+      if (!res.ok) {
+        addItem(url, "bad", `HTTP ${res.status}`);
+        return;
+      }
+      const ct = res.headers.get("content-type") || "";
+      if (ct.includes("text/event-stream")) {
+        addItem(url, "ok", "event-stream");
+      } else {
+        addItem(url, "warn", `content-type ${ct || "unknown"}`);
+      }
+    } catch (err) {
+      addItem(url, "bad", err.message || String(err));
+    } finally {
+      clearTimeout(t);
+      controller.abort();
+    }
+  }
+
+  function validateHead(data) {
+    const rootOk = anyPath(data, [["data", "root"], ["root"]]);
+    const slotOk = anyPath(data, [["data", "header", "message", "slot"], ["slot"]]);
+    const proposerOk = anyPath(data, [["data", "header", "message", "proposer_index"], ["proposer_index"]]);
+
+    const missing = [];
+    if (!rootOk) missing.push("root");
+    if (!slotOk) missing.push("slot");
+    if (missing.length) return { status: "bad", detail: `missing ${missing.join(", ")}` };
+    if (!proposerOk) return { status: "warn", detail: "missing proposer_index" };
+    return { status: "ok", detail: "ok" };
+  }
+
+  function validateFinality(data) {
+    const jSlot = anyPath(data, [["data", "current_justified", "slot"], ["data", "current_justified_slot"], ["current_justified_slot"], ["data", "justified_slot"]]);
+    const jRoot = anyPath(data, [["data", "current_justified", "root"], ["current_justified", "root"]]);
+    const fSlot = anyPath(data, [["data", "finalized", "slot"], ["data", "finalized_slot"], ["finalized_slot"]]);
+    const fRoot = anyPath(data, [["data", "finalized", "root"], ["finalized", "root"]]);
+
+    const jOk = jSlot && jRoot;
+    const fOk = fSlot && fRoot;
+
+    if (!jOk && !fOk) return { status: "bad", detail: "missing justified/finalized" };
+    if (!jOk || !fOk) {
+      const miss = [];
+      if (!jOk) miss.push("justified");
+      if (!fOk) miss.push("finalized");
+      return { status: "warn", detail: `missing ${miss.join(" + ")}` };
+    }
+    return { status: "ok", detail: "ok" };
+  }
+
+  function validateValidators(data) {
+    const rows = data?.data;
+    if (!Array.isArray(rows)) return { status: "bad", detail: "data[] missing" };
+    if (!rows.length) return { status: "warn", detail: "empty validator list" };
+    const r0 = rows[0];
+    const idxOk = anyPath(r0, [["index"], ["validator", "index"]]);
+    const statusOk = anyPath(r0, [["status"], ["validator", "status"]]);
+    if (!idxOk || !statusOk) return { status: "warn", detail: "missing index/status" };
+    return { status: "ok", detail: `count ${rows.length}` };
+  }
+
+  function validatePeers(data) {
+    const rows = data?.data;
+    if (!Array.isArray(rows)) return { status: "bad", detail: "data[] missing" };
+    if (!rows.length) return { status: "warn", detail: "no peers" };
+    return { status: "ok", detail: `count ${rows.length}` };
+  }
+
+  function validateSyncing(data) {
+    if (!data || typeof data !== "object") return { status: "warn", detail: "missing data" };
+    if (data?.data?.head_slot == null) return { status: "warn", detail: "head_slot missing" };
+    return { status: "ok", detail: "ok" };
+  }
+
+  async function check() {
+    results.innerHTML = "";
+    const base = baseUrl.value.replace(/\/+$/, "");
+    const prefix = ns.value;
+
+    for (const ep of endpoints) {
+      const url = `${base}/${prefix}/${ep}`;
+      if (ep.startsWith("events")) {
+        await checkSSE(url);
+        continue;
+      }
+      if (ep.includes("headers/head")) {
+        await checkJSON(url, validateHead);
+        continue;
+      }
+      if (ep.includes("finality_checkpoints")) {
+        await checkJSON(url, validateFinality);
+        continue;
+      }
+      if (ep.includes("validators")) {
+        await checkJSON(url, validateValidators);
+        continue;
+      }
+      if (ep.includes("peers")) {
+        await checkJSON(url, validatePeers);
+        continue;
+      }
+      if (ep.includes("syncing")) {
+        await checkJSON(url, validateSyncing);
+        continue;
+      }
+    }
+  }
+
+  runBtn.addEventListener("click", check);
+</script>
+
+</body>
+</html>
