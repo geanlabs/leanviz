@@ -4,8 +4,9 @@ export const DEFAULT_VALIDATOR_COUNT = 24;
 
 export const PHASES = [
   { id: "propose", label: "PROPOSE", icon: "📡", ratio: 0.20, desc: "Proposer broadcasts block" },
-  { id: "vote", label: "VOTE", icon: "🗳️", ratio: 0.45, desc: "Validators cast Head + FFG votes" },
-  { id: "confirm", label: "CONFIRM", icon: "⚡", ratio: 0.20, desc: "Quorum reaches two thirds" },
+  { id: "attest", label: "ATTEST", icon: "🗳️", ratio: 0.30, desc: "Validators cast Head + FFG votes" },
+  { id: "aggregate", label: "AGGREGATE", icon: "👥", ratio: 0.20, desc: "Aggregators combine votes" },
+  { id: "confirm", label: "CONFIRM", icon: "⚡", ratio: 0.15, desc: "Quorum reaches two thirds" },
   { id: "merge", label: "MERGE", icon: "🔗", ratio: 0.15, desc: "View merge enters canonical chain" }
 ];
 
