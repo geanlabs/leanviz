@@ -135,21 +135,6 @@ function resizeCanvas(canvas, ctx) {
   ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 async function pollLiveREST() {
   const base = state.live.beaconUrl.replace(/\/+$/, "");
   const ns = state.live.apiNamespace === "eth" ? "eth/v1" : "lean/v0";
@@ -370,8 +355,6 @@ function bindControls() {
   });
 }
 
-
-
 function updateUI(now) {
   updateConnectionStrip();
   const phase = getPhase(now);
@@ -462,10 +445,6 @@ function updateUI(now) {
   nodes.statVoted.textContent = String(votedActiveCount);
   nodes.statRate.textContent = `${Math.round((votedActiveCount / rateBase) * 100)}%`;
 }
-
-
-
-
 
 function bootstrap() {
   setupPeerPills();
