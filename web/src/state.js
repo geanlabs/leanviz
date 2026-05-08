@@ -25,7 +25,7 @@ export const COLORS = {
 };
 
 export const peers = [
-  { name: "LEAN", lang: "Go", status: "online", self: true },
+  { name: "GEAN", lang: "Go", status: "online", self: true },
   { name: "ZEAM", lang: "Zig", status: "online", self: false },
   { name: "REAM", lang: "Rust", status: "syncing", self: false },
   { name: "LANTERN", lang: "C", status: "online", self: false },

@@ -1,8 +1,8 @@
 # LeanViz Runbook
 
 ## Local Dev
-Serve the static files:
-`python3 -m http.server 7070 --directory web`
+Serve the static files and API proxy:
+`python3 proxy.py`
 
 Open:
 `http://localhost:7070/index.html`

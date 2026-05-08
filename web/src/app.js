@@ -47,7 +47,7 @@ function toUserError(err, phase) {
   const raw = err && err.message ? String(err.message) : String(err || "unknown error");
   const lower = raw.toLowerCase();
   if (lower.includes("failed to fetch") || lower.includes("networkerror") || lower.includes("load failed")) {
-    return `${phase}: network/CORS blocked (${state.live.beaconUrl})`;
+    return `${phase}: network/CORS blocked (${state.live.beaconUrl}) - Check if server sends CORS headers`;
   }
   if (lower.includes("abort")) {
     return `${phase}: request timeout`;
@@ -139,6 +139,7 @@ async function pollLiveREST() {
   const base = state.live.beaconUrl.replace(/\/+$/, "");
   const ns = state.live.apiNamespace === "eth" ? "eth/v1" : "lean/v0";
   try {
+    // Get fork choice data for head block and validator count
     const fcResp = await fetchJSON(`${base}/${ns}/fork_choice`);
     const fcData = fcResp?.data || fcResp || {};
 
@@ -150,6 +151,7 @@ async function pollLiveREST() {
       applyHead(headNode.slot, headNode.proposer_index || 0, headRoot);
     }
 
+    // Apply justified and finalized checkpoints directly from fork_choice response
     if (fcData.justified?.slot != null) {
       applyFinalityCheckpoint("justified", fcData.justified.root, fcData.justified.slot);
     }
@@ -157,11 +159,13 @@ async function pollLiveREST() {
       applyFinalityCheckpoint("finalized", fcData.finalized.root, fcData.finalized.slot);
     }
 
+    // Extract validator count from fork choice response
     const validatorCount = fcData.validator_count || getValidatorCount();
     ensureValidators(validatorCount);
     if (state.proposer >= getValidatorCount()) state.proposer = getValidatorCount() - 1;
 
-    state.live.peerCount = 0; // Not provided by fork_choice yet
+    // leanSpec doesn't provide peer count or syncing info via these endpoints
+    state.live.peerCount = 0; // Not provided by current endpoints
     nodes.mPeers.textContent = "-";
 
     state.live.lastRestSuccessAt = Date.now();
@@ -194,98 +198,20 @@ async function pollMetrics() {
   }
 }
 
-function handleSSE(type, payload) {
-  state.live.lastEventAt = Date.now();
-  state.live.lastEventType = type;
-  state.live.eventsSeen += 1;
-  nodes.dbgEvents.textContent = String(state.live.eventsSeen);
-  nodes.dbgLastEvent.textContent = type;
-  if (state.mode === "live") setLiveError("");
-
-  if (type === "head" || type === "block") {
-    const parsed = parseHeadEvent(payload);
-    applyHead(parsed.slot, parsed.proposer, parsed.root);
-    return;
-  }
-
-  if (type === "finalized_checkpoint") {
-    const parsed = parseFinalizedEvent(payload);
-    if (parsed.slot != null) applyFinalityCheckpoint("finalized", parsed.root, parsed.slot);
-    else if (parsed.epoch != null) applyFinalityCheckpoint("finalized", parsed.root, parsed.epoch * 32);
-    return;
-  }
-
-  if (type === "chain_reorg") {
-    setWarning("Chain reorg event observed from Lean node");
-    return;
-  }
-
-  if (type === "attester_slashing" || type === "proposer_slashing") {
-    const parsed = parseReorgEvent(payload);
-    const idx = parsed.index;
-    if (idx != null && idx < state.validators.length) {
-      state.validators[idx].status = "slashed";
-      setTimeout(() => {
-        if (state.validators[idx].status === "slashed") state.validators[idx].status = "idle";
-      }, 2500);
-    }
-  }
-}
+// handleSSE function removed as leanSpec doesn't provide SSE events endpoint
+// Events are now handled through polling in pollLiveREST()
 
 function connectLive() {
   disconnectLive();
   state.live.connected = false;
   setModeBadge();
-  const base = state.live.beaconUrl.replace(/\/+$/, "");
-  const ns = state.live.apiNamespace === "eth" ? "eth/v1" : "lean/v0";
-  const sseUrl = `${base}/${ns}/events?topics=head,block,finalized_checkpoint,chain_reorg,attester_slashing,proposer_slashing`;
-
-  try {
-    const es = new EventSource(sseUrl);
-    state.live.eventSource = es;
-
-    es.onopen = () => {
-      state.live.connected = true;
-      state.live.lastEventAt = Date.now();
-      setWarning("");
-      setLiveError("");
-      setModeBadge();
-    };
-
-    es.onerror = () => {
-      const errText = `SSE: network/CORS blocked (${state.live.beaconUrl})`;
-      setLiveError(errText);
-      if (state.mode === "live") {
-        setWarning(`${errText} - staying in live mode`);
-        state.live.connected = false;
-        setModeBadge();
-      } else {
-        setMode("demo", `${errText} - running in demo mode`);
-      }
-    };
-
-    const bindEvent = (name) => {
-      es.addEventListener(name, (ev) => {
-        let payload = {};
-        try {
-          payload = ev.data ? JSON.parse(ev.data) : {};
-        } catch (_) { }
-        handleSSE(name, payload);
-      });
-    };
-    ["head", "block", "finalized_checkpoint", "chain_reorg", "attester_slashing", "proposer_slashing"].forEach(bindEvent);
-  } catch (err) {
-    const userErr = toUserError(err, "SSE");
-    setLiveError(userErr);
-    if (state.mode === "live") {
-      setWarning(`${userErr} - staying in live mode`);
-      state.live.connected = false;
-      setModeBadge();
-    } else {
-      setMode("demo", `${userErr} - running in demo mode`);
-    }
-    return;
-  }
+  
+  // leanSpec doesn't provide SSE events endpoint, so we'll use polling only
+  state.live.connected = true; // Assume connected if we can reach the REST endpoints
+  state.live.lastEventAt = Date.now();
+  setWarning("");
+  setLiveError("");
+  setModeBadge();
 
   state.live.restTimer = setInterval(() => {
     pollLiveREST();
@@ -294,21 +220,7 @@ function connectLive() {
   pollLiveREST();
   pollMetrics();
 
-  state.live.watchdogTimer = setInterval(() => {
-    if (state.mode !== "live") return;
-    const idleFor = Date.now() - state.live.lastEventAt;
-    if (idleFor > 20000) {
-      const errText = "SSE: timeout waiting for events";
-      setLiveError(errText);
-      if (state.mode === "live") {
-        setWarning(`${errText} - staying in live mode`);
-        state.live.connected = false;
-        setModeBadge();
-      } else {
-        setMode("demo", "Live SSE timeout - running in demo mode");
-      }
-    }
-  }, 5000);
+  // No watchdog timer needed since we're using polling only
 }
 
 function disconnectLive() {

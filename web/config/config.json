@@ -1,6 +1,6 @@
 {
   "beaconUrl": "http://localhost:5052",
-  "metricsUrl": "http://localhost:9090",
+  "metricsUrl": "http://localhost:5054",
   "mode": "demo",
   "apiNamespace": "lean"
 }
